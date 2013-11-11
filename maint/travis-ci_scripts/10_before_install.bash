@@ -99,3 +99,5 @@ if [[ "$CLEANTEST" != "true" ]]; then
   #DBICTEST_ORA_EXTRAUSER_PASS=123
   #ORACLE_HOME=/usr/lib/oracle/xe/app/oracle/product/10.2.0/client
 fi
+
+SHORT_CIRCUIT_SMOKE=1
