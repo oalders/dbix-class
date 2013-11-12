@@ -34,6 +34,12 @@ run_or_err() {
   fi
 }
 
+apt_install() {
+  # flatten
+  pkgs="$@"
+  run_or_err "Installing Debian APT packages: $pkgs" "sudo apt-get install --allow-unauthenticated -y $pkgs"
+}
+
 extract_prereqs() {
   # once --verbose is set, --no-verbose can't disable it
   # do this by hand

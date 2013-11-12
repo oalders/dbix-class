@@ -11,9 +11,11 @@ if [[ -n "$SHORT_CIRCUIT_SMOKE" ]] ; then return ; fi
 # The oneliner is a tad convoluted - basicaly what we do is
 # slurp the entire file and get the index off the last
 # `processor    : XX` line
-export NUMTHREADS=$(( $(perl -0777 -n -e 'print (/ (?: .+ ^ processor \s+ : \s+ (\d+) ) (?! ^ processor ) /smx)' < /proc/cpuinfo) + 1 ))
+export NUMTHREADS="$(( $(perl -0777 -n -e 'print (/ (?: .+ ^ processor \s+ : \s+ (\d+) ) (?! ^ processor ) /smx)' < /proc/cpuinfo) + 1 ))"
 
-run_or_err "Installing common tools from APT" "sudo apt-get install --allow-unauthenticated -y libapp-nopaste-perl tree"
+# install some common tools from APT, more below unless CLEANTEST
+apt_install libapp-nopaste-perl tree apt-transport-https
+
 # FIXME - the debian package is oddly broken - uses a bin/env based shebang
 # so nothing works under a brew. Fix here until #debian-perl patches it up
 sudo /usr/bin/perl -p -i -e 's|#!/usr/bin/env perl|#!/usr/bin/perl|' $(which nopaste)
@@ -25,8 +27,18 @@ if [[ "$CLEANTEST" != "true" ]]; then
   sudo bash -c 'echo -e "firebird2.5-super\tshared/firebird/enabled\tboolean\ttrue" | debconf-set-selections'
   sudo bash -c 'echo -e "firebird2.5-super\tshared/firebird/sysdba_password/new_password\tpassword\t123" | debconf-set-selections'
 
-  APT_PACKAGES="memcached firebird2.5-super firebird2.5-dev expect"
-  run_or_err "Installing packages ($APT_PACKAGES)" "sudo apt-get install --allow-unauthenticated -y $APT_PACKAGES"
+  # add extra APT repo for Oracle
+  # (https is critical - apt-get update can't seem to follow the 302)
+  sudo bash -c 'echo -e "\ndeb [arch=i386] https://oss.oracle.com/debian unstable main non-free" >> /etc/apt/sources.list'
+
+  run_or_err "Updating APT available package list" "sudo apt-get update"
+
+  run_or_err "Cloning ora-archive from github" "git clone --bare https://github.com/ribasushi/travis_futzing.git /tmp/aptcachecrap"
+
+  git archive --format=tar --remote=file:///tmp/aptcachecrap poor_cache \
+    | sudo bash -c "tar -xO > /var/cache/apt/archives/oracle-xe_10.2.0.1-1.1_i386.deb"
+
+  apt_install memcached firebird2.5-super firebird2.5-dev expect libnss-db oracle-xe
 
 ### config memcached
   export DBICTEST_MEMCACHED=127.0.0.1:11211
@@ -89,15 +101,53 @@ if [[ "$CLEANTEST" != "true" ]]; then
 
   done
 
-### oracle
-  # FIXME: todo
-  #DBICTEST_ORA_DSN=dbi:Oracle:host=localhost;sid=XE
-  #DBICTEST_ORA_USER=dbic_test
-  #DBICTEST_ORA_PASS=123
+### config oracle
+  EXPECT_ORA_SCRIPT='
+    spawn /etc/init.d/oracle-xe configure
+    expect "Specify the HTTP port that will be used for Oracle Application Express"
+    sleep 0.5
+    send "\r"
+    expect "Specify a port that will be used for the database listener"
+    sleep 0.5
+    send "\r"
+    expect "Specify a password to be used for database accounts"
+    sleep 0.5
+    send "123\r"
+    expect "Confirm the password"
+    sleep 0.5
+    send "123\r"
+    expect "Do you want Oracle Database 10g Express Edition to be started on boot"
+    sleep 0.5
+    send "y\r"
+    sleep 0.5
+    expect eof
+    wait
+  '
+
+#  run_or_err "Configuring OracleXE" "sudo expect -c '$EXPECT_ORA_SCRIPT'"
+
+bash -c "sudo $(which expect) -c '$EXPECT_ORA_SCRIPT'"
+
+  # if we do not do this it doesn't manage to start before sqlplus
+  # is invoked below
+  run_or_err "Re-start OracleXE" "sudo /etc/init.d/oracle-xe restart"
+
+  export ORACLE_HOME=/usr/lib/oracle/xe/app/oracle/product/10.2.0/server
+
+  export DBICTEST_ORA_DSN=dbi:Oracle:host=localhost;sid=XE
+  export DBICTEST_ORA_USER=dbic_test
+  export DBICTEST_ORA_PASS=123
   #DBICTEST_ORA_EXTRAUSER_DSN=dbi:Oracle:host=localhost;sid=XE
   #DBICTEST_ORA_EXTRAUSER_USER=dbic_test_extra
   #DBICTEST_ORA_EXTRAUSER_PASS=123
-  #ORACLE_HOME=/usr/lib/oracle/xe/app/oracle/product/10.2.0/client
+
+  sudo ps fuxa | cat
+  sudo netstat -an46p | cat
+
+  ORACLE_SID=XE $ORACLE_HOME/bin/sqlplus -L -S system/123 @/dev/stdin "$DBICTEST_ORA_PASS" <<< "
+    CREATE USER $DBICTEST_ORA_USER IDENTIFIED_BY ?;
+    GRANT connect,resource TO $DBICTEST_ORA_USER;
+  "
 fi
 
 SHORT_CIRCUIT_SMOKE=1
