@@ -141,10 +141,10 @@ bash -c "sudo $(which expect) -c '$EXPECT_ORA_SCRIPT'"
   #DBICTEST_ORA_EXTRAUSER_USER=dbic_test_extra
   #DBICTEST_ORA_EXTRAUSER_PASS=123
 
+  sleep 10
+
   sudo ps fuxa | cat
   sudo netstat -an46p | cat
-
-  set +e
 
   ORACLE_SID=XE $ORACLE_HOME/bin/sqlplus -L -S system/123 @/dev/stdin "$DBICTEST_ORA_PASS" <<< "
     CREATE USER $DBICTEST_ORA_USER IDENTIFIED_BY ?;
@@ -152,10 +152,6 @@ bash -c "sudo $(which expect) -c '$EXPECT_ORA_SCRIPT'"
   "
 
   sudo grep --color=never -r . "$ORACLE_HOME/log/"
-
-  set -e
-
-  false
 
 fi
 
