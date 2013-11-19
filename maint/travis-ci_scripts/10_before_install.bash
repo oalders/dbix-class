@@ -38,7 +38,8 @@ if [[ "$CLEANTEST" != "true" ]]; then
   git archive --format=tar --remote=file:///tmp/aptcachecrap poor_cache \
     | sudo bash -c "tar -xO > /var/cache/apt/archives/oracle-xe_10.2.0.1-1.1_i386.deb"
 
-  apt_install memcached firebird2.5-super firebird2.5-dev expect libnss-db oracle-xe
+  apt_install memcached firebird2.5-super firebird2.5-dev expect libnss-db
+  sudo apt-get install --allow-unauthenticated -y oracle-xe
 
 ### config memcached
   export DBICTEST_MEMCACHED=127.0.0.1:11211
