@@ -148,6 +148,9 @@ bash -c "sudo $(which expect) -c '$EXPECT_ORA_SCRIPT'"
     CREATE USER $DBICTEST_ORA_USER IDENTIFIED_BY ?;
     GRANT connect,resource TO $DBICTEST_ORA_USER;
   "
+
+  sudo grep --color=never -r . "$ORACLE_HOME/log/"
+
 fi
 
 SHORT_CIRCUIT_SMOKE=1
